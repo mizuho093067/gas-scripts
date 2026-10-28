@@ -38,7 +38,8 @@ https://github.com/mizuho093067/gas-scripts
 
 ```
 gas-scripts/
-└── CLAUDE.md       # このファイル
+├── CLAUDE.md               # このファイル
+└── summary_dashboard.gs    # 売上データの月次集計・サマリー書き込み・棒グラフ作成（毎朝9時に自動実行）
 ```
 
 - スクリプトを追加したら、上の構成図も更新する。
