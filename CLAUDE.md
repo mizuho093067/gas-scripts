@@ -39,6 +39,7 @@ https://github.com/mizuho093067/gas-scripts
 ```
 gas-scripts/
 ├── CLAUDE.md               # このファイル
+├── email_classifier.gs     # 「要処理」メールを Claude API で分類・要約し、シート記録と Slack 通知（5分おきに自動実行）
 └── summary_dashboard.gs    # 売上データの月次集計・サマリー書き込み・棒グラフ作成（毎朝9時に自動実行）
 ```
 
