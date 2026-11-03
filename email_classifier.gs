@@ -45,12 +45,17 @@ function processEmails() {
       return;
     }
 
-    const pendingLabel = GmailApp.getUserLabelByName(PENDING_LABEL_NAME);
+    const pendingLabel = findLabel(PENDING_LABEL_NAME);
     if (!pendingLabel) {
-      console.log(`Gmail に「${PENDING_LABEL_NAME}」ラベルが見つかりません。ラベル名を確認してください。`);
+      // 原因を調べやすいよう、実行しているアカウントとラベルの一覧をログに出す
+      const labelNames = GmailApp.getUserLabels().map((label) => `「${label.getName()}」`);
+      console.log(`Gmail に「${PENDING_LABEL_NAME}」ラベルが見つかりません。`);
+      console.log(`実行しているアカウント: ${Session.getEffectiveUser().getEmail()}`);
+      console.log(`このアカウントのラベル（${labelNames.length} 件）: ${labelNames.join("、") || "なし"}`);
       return;
     }
-    const doneLabel = GmailApp.getUserLabelByName(DONE_LABEL_NAME) || GmailApp.createLabel(DONE_LABEL_NAME);
+    console.log(`使用するラベル: 「${pendingLabel.getName()}」`);
+    const doneLabel = findLabel(DONE_LABEL_NAME) || GmailApp.createLabel(DONE_LABEL_NAME);
     const mailLogSheet = getOrCreateSheet(ss, MAIL_LOG_SHEET_NAME, ["受信日時", "送信者", "件名", "分類", "要約"]);
 
     // 検索文ではなくラベルから直接スレッドを取り出す（ラベル名の書き方による検索の取りこぼしを防ぐ）
@@ -114,6 +119,23 @@ function processEmails() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 名前を指定して Gmail のラベルを探す
+// 前後の空白・全角半角の違いや、別のラベルの中に作られたラベル（例: 「仕事/要処理」）も見つけられるようにする
+function findLabel(name) {
+  const exactLabel = GmailApp.getUserLabelByName(name);
+  if (exactLabel) {
+    return exactLabel;
+  }
+
+  const normalize = (text) => text.normalize("NFKC").trim();
+  const target = normalize(name);
+  return GmailApp.getUserLabels().find((label) => {
+    const fullName = normalize(label.getName());
+    const lastPart = normalize(fullName.split("/").pop());
+    return fullName === target || lastPart === target;
+  }) || null;
 }
 
 // 5分おきに processEmails を自動実行するトリガーを登録する（最初に1回だけ手動で実行する）
