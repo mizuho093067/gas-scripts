@@ -29,6 +29,7 @@ function processEmails() {
   // 前回の実行が終わる前に次のトリガーが動いても、同じメールを二重に処理しないようにする
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) {
+    console.log("前回の実行がまだ終わっていないため、今回は処理しません。");
     return;
   }
 
@@ -38,21 +39,30 @@ function processEmails() {
     const apiKey = props.getProperty("CLAUDE_API_KEY");
     const webhookUrl = props.getProperty("SLACK_WEBHOOK_URL");
     if (!apiKey || !webhookUrl) {
-      logError(ss, "設定の読み込み", "", "スクリプトプロパティに CLAUDE_API_KEY または SLACK_WEBHOOK_URL が登録されていません。");
+      const message = "スクリプトプロパティに CLAUDE_API_KEY または SLACK_WEBHOOK_URL が登録されていません。";
+      console.log(message);
+      logError(ss, "設定の読み込み", "", message);
       return;
     }
 
     const pendingLabel = GmailApp.getUserLabelByName(PENDING_LABEL_NAME);
     if (!pendingLabel) {
+      console.log(`Gmail に「${PENDING_LABEL_NAME}」ラベルが見つかりません。ラベル名を確認してください。`);
       return;
     }
     const doneLabel = GmailApp.getUserLabelByName(DONE_LABEL_NAME) || GmailApp.createLabel(DONE_LABEL_NAME);
     const mailLogSheet = getOrCreateSheet(ss, MAIL_LOG_SHEET_NAME, ["受信日時", "送信者", "件名", "分類", "要約"]);
 
-    const threads = GmailApp.search(`label:${PENDING_LABEL_NAME} is:unread`, 0, MAX_MESSAGES_PER_RUN);
+    // 検索文ではなくラベルから直接スレッドを取り出す（ラベル名の書き方による検索の取りこぼしを防ぐ）
+    const threads = pendingLabel.getThreads(0, MAX_MESSAGES_PER_RUN);
+    console.log(`「${PENDING_LABEL_NAME}」ラベルのスレッド: ${threads.length} 件`);
     let processedCount = 0;
 
     for (const thread of threads) {
+      if (!thread.isUnread()) {
+        console.log(`未読メールがないためスキップ: ${thread.getFirstMessageSubject()}`);
+        continue;
+      }
       let allSucceeded = true;
 
       for (const message of thread.getMessages()) {
@@ -74,16 +84,20 @@ function processEmails() {
             escapeForSheet(result.summary)
           ]);
           message.markRead();
+          console.log(`記録しました: ${subject}（${result.category}）`);
 
           // 2. Slack に通知する（失敗してもエラーログに残し、ラベルの付け替えは続ける）
           try {
             notifySlack(webhookUrl, subject, result, thread.getPermalink());
+            console.log(`Slack に通知しました: ${subject}`);
           } catch (e) {
+            console.log(`Slack 通知に失敗しました: ${subject} / ${e.message}`);
             logError(ss, "Slack 通知", subject, e.message);
           }
         } catch (e) {
           // 分類に失敗したメールは未読のまま残し、次回の実行で再処理する
           allSucceeded = false;
+          console.log(`分類・記録に失敗しました: ${subject} / ${e.message}`);
           logError(ss, "メールの分類・記録", subject, e.message);
         }
       }
@@ -95,6 +109,7 @@ function processEmails() {
       }
     }
   } catch (e) {
+    console.log(`処理全体でエラーが発生しました: ${e.message}`);
     logError(SpreadsheetApp.getActiveSpreadsheet(), "全体の処理", "", e.message);
   } finally {
     lock.releaseLock();
