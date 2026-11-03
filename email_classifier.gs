@@ -110,9 +110,14 @@ function processEmails() {
       }
 
       // 3. スレッド内の未読メールをすべて処理できたら、ラベルを付け替える
+      // スレッドの既読状態は取得した時点のまま保持されるため、最新の状態を読み込み直してから確認する
+      thread.refresh();
       if (allSucceeded && !thread.isUnread()) {
         thread.addLabel(doneLabel);
         thread.removeLabel(pendingLabel);
+        console.log(`ラベルを「${DONE_LABEL_NAME}」に付け替えました: ${thread.getFirstMessageSubject()}`);
+      } else {
+        console.log(`未処理のメールが残っているため、ラベルは「${PENDING_LABEL_NAME}」のままにします: ${thread.getFirstMessageSubject()}`);
       }
     }
   } catch (e) {
